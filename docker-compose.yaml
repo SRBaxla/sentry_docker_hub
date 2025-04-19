@@ -11,6 +11,12 @@ services:
       - INFLUXDB_BUCKET=sentry
       - INFLUXDB_RETENTION_POLICY=10y
 
+  orchestrator:
+    build: .
+    command: python main.py
+    depends_on:
+      - influxdb
+      - neo4j
 
   binance_collector:
     build: ./binance_collector
