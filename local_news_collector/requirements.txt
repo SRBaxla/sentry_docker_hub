@@ -1,0 +1,6 @@
+requests
+influxdb-client
+transformers
+torch
+tweepy    # if you prefer the library over raw HTTP
+praw      # for Reddit API usage

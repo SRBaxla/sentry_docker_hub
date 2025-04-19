@@ -2,13 +2,15 @@ version: '3.8'
 services:
   influxdb:
     image: influxdb:2.7
+    ports:
+      - "8086:8086"  # <-- this line is missing
     volumes:
       - influxdb_data:/var/lib/influxdb2
       - influxdb_backup:/backups
     environment:
       - INFLUXDB_BUCKET=sentry
       - INFLUXDB_RETENTION_POLICY=10y
-    command: influxd
+
 
   binance_collector:
     build: ./binance_collector
@@ -21,11 +23,14 @@ services:
 
   neo4j:
     image: neo4j:5.7
+    ports:
+      - "7474:7474"
+      - "7687:7687"  # <-- this line is missing
     volumes:
       - neo4j_data:/data
       - neo4j_import:/import
     environment:
-      - NEO4J_AUTH=${NEO4J_AUTH}
+      - NEO4J_AUTH=neo4j/sentry123
 
   neo4j_sync:
     build: ./neo4j_sync
@@ -42,6 +47,7 @@ services:
     build: ./model_training
     depends_on:
       - influxdb
+      # - local_news_collector  # JSON store available locally
     environment:
       - INFLUX_URL=http://influxdb:8086
       - INFLUX_TOKEN=${INFLUX_TOKEN}
@@ -66,10 +72,10 @@ services:
       - BROKER_API_KEY=${BINANCE_API_KEY}
       - BROKER_SECRET=${BINANCE_API_SECRET}
       - INFERENCE_URL=http://inference_service:5000
-      - BINANCE_BASE_URL=https://testnet.binance.vision
-      - BINANCE_FUTURES_URL=https://testnet.binancefuture.com
+      - BINANCE_BASE_URL=https://testnet.binance.vision  # spot testnet
+      - BINANCE_FUTURES_URL=https://testnet.binancefuture.com  # futures testnet
       - USE_TESTNET=true
-      - TRADING_MODE=spot
+      - TRADING_MODE=spot  # or 'futures'
     command: python executor.py
 
   backup_service:
