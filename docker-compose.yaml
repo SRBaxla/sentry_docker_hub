@@ -1,0 +1,90 @@
+version: '3.8'
+services:
+  influxdb:
+    image: influxdb:2.7
+    volumes:
+      - influxdb_data:/var/lib/influxdb2
+      - influxdb_backup:/backups
+    environment:
+      - INFLUXDB_BUCKET=sentry
+      - INFLUXDB_RETENTION_POLICY=10y
+    command: influxd
+
+  binance_collector:
+    build: ./binance_collector
+    depends_on:
+      - influxdb
+    environment:
+      - INFLUX_URL=http://influxdb:8086
+      - INFLUX_TOKEN=${INFLUX_TOKEN}
+      - INFLUX_ORG=${INFLUX_ORG}
+
+  neo4j:
+    image: neo4j:5.7
+    volumes:
+      - neo4j_data:/data
+      - neo4j_import:/import
+    environment:
+      - NEO4J_AUTH=${NEO4J_AUTH}
+
+  neo4j_sync:
+    build: ./neo4j_sync
+    depends_on:
+      - influxdb
+      - neo4j
+    environment:
+      - INFLUX_URL=http://influxdb:8086
+      - INFLUX_TOKEN=${INFLUX_TOKEN}
+      - NEO4J_URL=bolt://neo4j:7687
+      - NEO4J_AUTH=${NEO4J_AUTH}
+
+  model_training:
+    build: ./model_training
+    depends_on:
+      - influxdb
+    environment:
+      - INFLUX_URL=http://influxdb:8086
+      - INFLUX_TOKEN=${INFLUX_TOKEN}
+      - NEWS_JSON_PATH=/data/news
+    command: python live_train.py
+
+  inference_service:
+    build: ./inference_service
+    depends_on:
+      - model_training
+    ports:
+      - '5000:5000'
+    environment:
+      - MODEL_PATH=/models/latest
+    command: python serve.py
+
+  trade_agent:
+    build: ./trade_agent
+    depends_on:
+      - inference_service
+    environment:
+      - BROKER_API_KEY=${BINANCE_API_KEY}
+      - BROKER_SECRET=${BINANCE_API_SECRET}
+      - INFERENCE_URL=http://inference_service:5000
+      - BINANCE_BASE_URL=https://testnet.binance.vision
+      - BINANCE_FUTURES_URL=https://testnet.binancefuture.com
+      - USE_TESTNET=true
+      - TRADING_MODE=spot
+    command: python executor.py
+
+  backup_service:
+    build: ./backup_service
+    depends_on:
+      - influxdb
+      - neo4j
+    volumes:
+      - influxdb_backup:/backups/influxdb
+      - neo4j_data:/backups/neo4j
+    environment:
+      - BACKUP_SCHEDULE=0 */6 * * *
+
+volumes:
+  influxdb_data:
+  influxdb_backup:
+  neo4j_data:
+  neo4j_import:
