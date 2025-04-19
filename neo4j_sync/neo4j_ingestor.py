@@ -36,11 +36,13 @@ def push_to_neo4j(records):
     with db.session() as session:
         for table in records:
             for row in table.records:
+                print(row)
                 coin = row["symbol"]
                 source = row["source"]
                 ts = row["_time"].isoformat()
-                positive = float(row.get("positive", 0))
-                negative = float(row.get("negative", 0))
+                positive = float(row["positive"])
+                negative = float(row["negative"])
+
 
                 print(f"[→] {source} → {coin} | +{positive:.3f} / -{negative:.3f} @ {ts}")
 

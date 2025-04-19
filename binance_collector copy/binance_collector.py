@@ -6,7 +6,7 @@ from datetime import datetime, timedelta
 from influxdb_client import InfluxDBClient, Point, WritePrecision
 from influxdb_client.client.write_api import SYNCHRONOUS
 from dotenv import load_dotenv
-from trust_registry import get_trusted_sources
+from local_news_collector.trust_registry import get_trusted_sources
 
 load_dotenv()
 
