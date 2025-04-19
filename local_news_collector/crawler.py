@@ -10,6 +10,8 @@ import dateparser
 from newspaper import Article
 from bs4 import BeautifulSoup
 import random
+import time
+
 
 # Twitter (v2)
 import tweepy

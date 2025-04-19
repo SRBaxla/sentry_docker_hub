@@ -64,3 +64,4 @@ while True:
 
     print("\nSleeping for 1 hour...")
     time.sleep(3600)
+    client.close()
