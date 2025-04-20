@@ -17,6 +17,7 @@ services:
     depends_on:
       - influxdb
       - neo4j
+    restart: always
 
   binance_collector:
     build: ./binance_collector

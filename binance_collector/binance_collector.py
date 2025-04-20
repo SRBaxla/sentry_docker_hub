@@ -6,7 +6,7 @@ from datetime import datetime, timedelta
 from influxdb_client import InfluxDBClient, Point, WritePrecision
 from influxdb_client.client.write_api import SYNCHRONOUS
 from dotenv import load_dotenv
-from trust_registry import get_trusted_sources
+# from trust_registry import get_trusted_sources
 
 load_dotenv()
 
@@ -46,7 +46,7 @@ def fetch_ohlcv(symbol, interval="1m", start=None, end=None, limit=1000):
         return []
 
 def store_to_influx(symbol, ohlcv_data):
-    trusted_sources = get_trusted_sources()  # not used directly here yet, but placeholder for graph-aware push
+    # trusted_sources = get_trusted_sources()  # not used directly here yet, but placeholder for graph-aware push
     for candle in ohlcv_data:
         ts = datetime.utcfromtimestamp(candle[0] / 1000).isoformat()
         p = (
@@ -78,16 +78,13 @@ def run_backfill(days=7):
             time.sleep(0.25)  # avoid rate limits
 
 def run_live():
-    while True:
-        for symbol in SYMBOLS:
-            data = fetch_ohlcv(symbol, limit=1)
-            if data:
-                store_to_influx(symbol, data)
-        print("[⏱] Sleeping 60s...")
-        time.sleep(60)
+    for symbol in SYMBOLS:
+        data = fetch_ohlcv(symbol, limit=1)
+        if data:
+            store_to_influx(symbol, data)
+    print("[✓] Binance snapshot written")
 
 if __name__ == "__main__":
     print("[MODE] Backfilling historical data...")
-    run_backfill(days=2)
-    print("[MODE] Switching to live collection...")
-    run_live()
+    run_backfill(days=7)
+    print("[✓] Backfill complete.")

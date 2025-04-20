@@ -31,7 +31,7 @@ search_terms = {
 
 trusted_sources = get_trusted_sources(threshold=0.5)
 
-while True:
+def run_collector():
     all_items = []
     for symbol, terms in search_terms.items():
         for keyword in terms:
@@ -61,7 +61,4 @@ while True:
 
         write_api.write(bucket=BUCKET, record=p)
         print(f"[✓] Collected {item['symbol']} from {item['source_id']} @ {ts}")
-
-    print("\nSleeping for 1 hour...")
-    time.sleep(3600)
-    client.close()
+        
