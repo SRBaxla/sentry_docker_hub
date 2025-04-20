@@ -1,14 +1,12 @@
 import os
 import time
 from datetime import datetime
-from crawler import fetch_news, fetch_reddit,crawl_all
+from .crawler import fetch_news, fetch_reddit, crawl_all
 from sentiment import analyze_sentiment
 from store_json import store_raw
-from trust_registry import get_trusted_sources
+# from trust_registry import get_trusted_sources
 from influxdb_client import InfluxDBClient, Point, WritePrecision
 from influxdb_client.client.write_api import SYNCHRONOUS
-
-
 from dotenv import load_dotenv
 
 load_dotenv()

@@ -8,6 +8,10 @@ from binance_collector.trust_registry import trust_registry
 from local_news_collector.collector import run_collector  # should crawl all news & reddit
 from binance_collector.binance_collector import run_backfill, run_live
 from neo4j_sync.neo4j_ingestor import push_to_neo4j
+import sys
+import os
+sys.path.append(os.path.abspath(os.path.dirname(__file__)))
+
 
 # Timestamps for throttling
 last_news_sync = 0

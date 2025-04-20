@@ -42,6 +42,11 @@ class TrustRegistry:
         if score >= threshold:
             return True
         return allow_exploration and score >= TRUST_FLOOR
+    
+    
 
 # Helper instance for import
 trust_registry = TrustRegistry()
+
+def get_trusted_sources(threshold: float = 0.3):
+    return [src for src, score in trust_registry.scores.items() if score >= threshold]
