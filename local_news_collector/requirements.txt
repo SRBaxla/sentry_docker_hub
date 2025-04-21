@@ -2,5 +2,11 @@ requests
 influxdb-client
 transformers
 torch
-tweepy    # if you prefer the library over raw HTTP
+# tweepy    # if you prefer the library over raw HTTP
 praw      # for Reddit API usage
+GoogleNews
+python-dateutil
+beautifulsoup4
+newspaper3k
+dateparser
+lxml==4.9.3  # Stable and often available as a wheel on all OSes

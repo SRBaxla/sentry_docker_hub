@@ -1,4 +1,3 @@
-# neo4j_sync/Dockerfile
 FROM python:3.10-slim
 
 WORKDIR /app
@@ -8,4 +7,4 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 COPY . .
 
-CMD ["python", "neo4j_ingestor.py"]
+CMD ["python", "main_orchestrator.py"]

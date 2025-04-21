@@ -6,7 +6,6 @@ from datetime import datetime, timedelta
 from influxdb_client import InfluxDBClient, Point, WritePrecision
 from influxdb_client.client.write_api import SYNCHRONOUS
 from dotenv import load_dotenv
-# from trust_registry import get_trusted_sources
 
 load_dotenv()
 
@@ -17,6 +16,9 @@ BUCKET = os.getenv("INFLUX_BUCKET", "Sentry")
 
 BASE_URL = "https://api.binance.com"
 OHLC_ENDPOINT = "/api/v3/klines"
+print(INFLUX_ORG)
+print(INFLUX_TOKEN)
+print(INFLUX_URL)
 
 SYMBOLS = [
     "BTCUSDT", "ETHUSDT", "BNBUSDT", "XRPUSDT", "SOLUSDT", "DOGEUSDT",
@@ -46,7 +48,6 @@ def fetch_ohlcv(symbol, interval="1m", start=None, end=None, limit=1000):
         return []
 
 def store_to_influx(symbol, ohlcv_data):
-    # trusted_sources = get_trusted_sources()  # not used directly here yet, but placeholder for graph-aware push
     for candle in ohlcv_data:
         ts = datetime.utcfromtimestamp(candle[0] / 1000).isoformat()
         p = (
@@ -60,7 +61,7 @@ def store_to_influx(symbol, ohlcv_data):
             .time(ts, WritePrecision.S)
         )
         write_api.write(bucket=BUCKET, record=p)
-        print(f"[✓] {symbol} @ {ts}")
+        print(f"[✓] {symbol} @ {ts} | {datetime.utcnow().isoformat()}")
 
 def run_backfill(days=7):
     interval_minutes = 1
@@ -82,9 +83,16 @@ def run_live():
         data = fetch_ohlcv(symbol, limit=1)
         if data:
             store_to_influx(symbol, data)
+        else:
+            print(f"[!] No data received for {symbol}")
     print("[✓] Binance snapshot written")
 
 if __name__ == "__main__":
-    print("[MODE] Backfilling historical data...")
-    run_backfill(days=7)
-    print("[✓] Backfill complete.")
+    mode = os.getenv("MODE")
+    if mode == "live":
+        print("[MODE] Running in live mode...")
+        run_live()
+    else:
+        print("[MODE] Backfilling historical data...")
+        run_backfill(days=7)
+        print("[✓] Backfill complete.")

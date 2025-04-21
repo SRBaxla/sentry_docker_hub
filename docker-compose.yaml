@@ -11,20 +11,28 @@ services:
       - INFLUXDB_BUCKET=sentry
       - INFLUXDB_RETENTION_POLICY=10y
 
-  orchestrator:
-    build: .
-    command: python main.py
-    depends_on:
-      - influxdb
-      - neo4j
-    restart: always
-
-  binance_collector:
-    build: ./binance_collector
+  local_news_collector:
+    build: ./local_news_collector
+    ports:
+      - "8001:8001"
     depends_on:
       - influxdb
     environment:
       - INFLUX_URL=http://influxdb:8086
+      - INFLUX_TOKEN=${INFLUX_TOKEN}
+      - INFLUX_ORG=${INFLUX_ORG}
+      - INFLUX_BUCKET=Sentry
+    command: python collector.py
+
+  binance_collector:
+    build: ./binance_collector
+    ports:
+      - "8002:8002"
+    depends_on:
+      - influxdb
+    environment:
+      - INFLUX_URL=http://influxdb:8086
+      - MODE=${MODE}
       - INFLUX_TOKEN=${INFLUX_TOKEN}
       - INFLUX_ORG=${INFLUX_ORG}
 
@@ -39,19 +47,42 @@ services:
     environment:
       - NEO4J_AUTH=neo4j/sentry123
 
+  orchestrator:
+    build:
+      context: ./orchestrator
+    command: python main_orchestrator.py
+    depends_on:
+      - local_news_collector
+      - binance_collector
+      - neo4j_sync
+    environment:
+      - INFLUX_URL=http://influxdb:8086
+      - INFLUX_TOKEN=${INFLUX_TOKEN}
+      - INFLUX_ORG=${INFLUX_ORG}
+      - INFLUX_BUCKET=Sentry
+      - NEO4J_URI=bolt://neo4j:7687
+      - NEO4J_USER=${NEO4J_USER}
+      - NEO4J_PASS=${NEO4J_PASS}
+
+
   neo4j_sync:
     build: ./neo4j_sync
+    ports:
+      - "8003:8003"
     depends_on:
       - influxdb
       - neo4j
     environment:
       - INFLUX_URL=http://influxdb:8086
       - INFLUX_TOKEN=${INFLUX_TOKEN}
+      - INFLUX_ORG=${INFLUX_ORG}
       - NEO4J_URL=bolt://neo4j:7687
       - NEO4J_AUTH=${NEO4J_AUTH}
 
   model_training:
     build: ./model_training
+    ports:
+      - "8005:8005"
     depends_on:
       - influxdb
       # - local_news_collector  # JSON store available locally

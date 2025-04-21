@@ -1,0 +1,5 @@
+python-dotenv
+apscheduler
+influxdb-client
+neo4j
+requests

@@ -14,7 +14,7 @@ import time
 
 
 # Twitter (v2)
-import tweepy
+# import tweepy
 
 # Reddit via JSON endpoint
 
@@ -94,56 +94,55 @@ def fetch_news(query: str, limit: int = 10, from_date=None, to_date=None, symbol
 
 
 # ─── TWITTER ───────────────────────────────────────────────────────────
-import time
 
 
-CACHE_PATH = "twitter_cache.json"
-CACHE_TTL = 3600  # 1 hour
+# CACHE_PATH = "twitter_cache.json"
+# CACHE_TTL = 3600  # 1 hour
 
-def fetch_tweets(query: str, limit: int = 10, from_date=None, to_date=None):
-    # Use cache if recent
-    if os.path.exists(CACHE_PATH):
-        age = time.time() - os.path.getmtime(CACHE_PATH)
-        if age < CACHE_TTL:
-            print(f"[CACHE] Using cached tweets ({round(age)}s old)")
-            with open(CACHE_PATH, "r", encoding="utf-8") as f:
-                return json.load(f)
+# def fetch_tweets(query: str, limit: int = 10, from_date=None, to_date=None):
+#     # Use cache if recent
+#     if os.path.exists(CACHE_PATH):
+#         age = time.time() - os.path.getmtime(CACHE_PATH)
+#         if age < CACHE_TTL:
+#             print(f"[CACHE] Using cached tweets ({round(age)}s old)")
+#             with open(CACHE_PATH, "r", encoding="utf-8") as f:
+#                 return json.load(f)
 
-    if not TWITTER_TOKEN:
-        print("[WARN] Twitter token missing")
-        return []
+#     if not TWITTER_TOKEN:
+#         print("[WARN] Twitter token missing")
+#         return []
 
-    client = tweepy.Client(bearer_token=TWITTER_TOKEN, wait_on_rate_limit=True)
+#     client = tweepy.Client(bearer_token=TWITTER_TOKEN, wait_on_rate_limit=True)
 
-    start_time = from_date.isoformat() + "Z" if from_date else None
-    end_time   = to_date.isoformat() + "Z" if to_date else None
+#     start_time = from_date.isoformat() + "Z" if from_date else None
+#     end_time   = to_date.isoformat() + "Z" if to_date else None
 
-    try:
-        tweets = client.search_recent_tweets(
-            query=query,
-            start_time=start_time,
-            end_time=end_time,
-            max_results=min(limit, 100),
-            tweet_fields=["created_at", "text"]
-        )
-    except Exception as e:
-        print("[ERROR] Twitter API error:", e)
-        return []
+#     try:
+#         tweets = client.search_recent_tweets(
+#             query=query,
+#             start_time=start_time,
+#             end_time=end_time,
+#             max_results=min(limit, 100),
+#             tweet_fields=["created_at", "text"]
+#         )
+#     except Exception as e:
+#         print("[ERROR] Twitter API error:", e)
+#         return []
 
-    output = []
-    for t in tweets.data or []:
-        output.append({
-            "source":    "twitter",
-            "id":        str(t.id),
-            "text":      t.text,
-            "published": t.created_at.isoformat()
-        })
+#     output = []
+#     for t in tweets.data or []:
+#         output.append({
+#             "source":    "twitter",
+#             "id":        str(t.id),
+#             "text":      t.text,
+#             "published": t.created_at.isoformat()
+#         })
 
-    # Write to cache
-    with open(CACHE_PATH, "w", encoding="utf-8") as f:
-        json.dump(output, f, ensure_ascii=False, indent=2)
+#     # Write to cache
+#     with open(CACHE_PATH, "w", encoding="utf-8") as f:
+#         json.dump(output, f, ensure_ascii=False, indent=2)
 
-    return output
+#     return output
 
 
 

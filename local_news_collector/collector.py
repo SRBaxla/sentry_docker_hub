@@ -1,10 +1,10 @@
 import os
 import time
 from datetime import datetime
-from .crawler import fetch_news, fetch_reddit, crawl_all
+from crawler import crawl_all
 from sentiment import analyze_sentiment
-from store_json import store_raw
-# from trust_registry import get_trusted_sources
+# from store_json import store_raw
+from trust_registry import trust_registry
 from influxdb_client import InfluxDBClient, Point, WritePrecision
 from influxdb_client.client.write_api import SYNCHRONOUS
 from dotenv import load_dotenv
@@ -18,6 +18,7 @@ BUCKET = os.getenv("INFLUX_BUCKET", "Sentry")
 
 client = InfluxDBClient(url=INFLUX_URL, token=INFLUX_TOKEN, org=INFLUX_ORG)
 write_api = client.write_api(write_options=SYNCHRONOUS)
+
 # Define keywords per coin
 search_terms = {
     "BTCUSDT": ["bitcoin", "btc"],
@@ -26,8 +27,6 @@ search_terms = {
     "XRPUSDT": ["xrp"],
     "DOGEUSDT": ["doge", "dogecoin"]
 }
-
-trusted_sources = get_trusted_sources(threshold=0.5)
 
 def run_collector():
     all_items = []
@@ -40,7 +39,7 @@ def run_collector():
 
     for item in all_items:
         source_id = item.get("source_id")
-        if source_id not in trusted_sources:
+        if not trust_registry.is_trusted(source_id):
             print(f"[SKIP] {source_id} not trusted")
             continue
 
@@ -59,4 +58,3 @@ def run_collector():
 
         write_api.write(bucket=BUCKET, record=p)
         print(f"[✓] Collected {item['symbol']} from {item['source_id']} @ {ts}")
-        
