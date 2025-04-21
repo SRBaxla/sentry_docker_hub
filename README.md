@@ -1,42 +1,22 @@
-# Sentry Docker Hub
+# 🧠 Sentry Docker Hub
 
-This unified project, **Sentry Docker Hub**, bundles data collection, cleaning, storage, graph syncing, sentiment/news ingestion, model training/inference, trade execution, and backup into a single Docker‑composed solution.
+A full-stack, containerized, AI-powered trading system with real-time data ingestion, sentiment analysis, model training, trade execution, and backup — all orchestrated with Docker Compose.
 
-## Project Structure
+---
 
-```
-Sentry-Docker-Hub/
-├── binance_collector/
-│   ├── Dockerfile
-│   ├── collector.py
-│   ├── symbol_manager.py
-│   └── cleaning.py
-├── local_news_collector/
-│   ├── fetcher.py
-│   ├── sentiment.py
-│   └── store_json.py
-├── neo4j_sync/
-│   ├── Dockerfile
-│   └── syncer.py
-├── model_training/
-│   ├── Dockerfile
-│   ├── live_train.py
-│   └── historical_train.py
-├── inference_service/
-│   ├── Dockerfile
-│   └── serve.py
-├── trade_agent/
-│   ├── Dockerfile
-│   ├── executor.py
-│   └── broker_adapter.py
-├── influxdb/
-│   └── config/
-│       ├── influxdb.conf
-│       └── backup.sh
-├── backup_service/
-│   ├── Dockerfile
-│   └── backup_collector.py
-├── docker-compose.yaml
-├── .env
-└── README.md
-```
+## 📦 Architecture Overview
+
+This project unifies the following microservices:
+
+- **`binance_collector/`**: Streams OHLCV crypto data, cleans and stores to InfluxDB.
+- **`local_news_collector/`**: Fetches financial news, applies FinBERT sentiment analysis, stores insights.
+- **`neo4j_sync/`**: Syncs data from InfluxDB to a Neo4j knowledge graph.
+- **`model_training/`**: Trains ML models on historical/live price & sentiment data.
+- **`inference_service/`**: Runs trained models for real-time decision-making.
+- **`trade_agent/`**: Executes simulated trades with balance and tax logic.
+- **`backup_service/`**: Periodically backs up InfluxDB and other data volumes.
+
+---
+
+## 🗃 Project Structure
+
