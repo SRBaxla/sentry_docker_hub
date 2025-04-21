@@ -13,4 +13,4 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY . .
 
 # Default execution command
-CMD ["python", "binance_collector.py"]
+CMD ["python binance_collector:app -host 0.0.0.0 -port 8002"]

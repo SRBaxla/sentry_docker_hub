@@ -7,15 +7,16 @@ logging.basicConfig(level=logging.INFO)
 scheduler = BlockingScheduler()
 
 # Read service URLs from env (set these in your docker‑compose)
-NEWS_URL      = os.getenv("NEWS_URL",      "http://local_news_collector:8001/collect")
-NEO4J_URL     = os.getenv("NEO4J_URL",     "http://neo4j_ingestor:8003/sync")
-BACKFILL_URL  = os.getenv("BACKFILL_URL",  "http://binance_collector:8002/backfill")
-TRAIN_URL     = os.getenv("TRAIN_URL",     "http://model_trainer:8005/train")
+NEWS_URL      = os.getenv("NEWS_URL",      "http://localhost:8001/run_collector")
+NEO4J_URL     = os.getenv("NEO4J_URL",     "http://localhost:8003/sync")
+BACKFILL_URL  = os.getenv("BACKFILL_URL",  "http://localhost:8002/backfill")
+LIVE_URL      = os.getenv("LIVE_URL",      "http://localhost:8002/live")
+TRAIN_URL     = os.getenv("TRAIN_URL",     "http://localhost:8005/train")
 
 def post(endpoint: str, name: str):
     try:
         logging.info(f"[{name}] POST {endpoint}")
-        resp = requests.post(endpoint, timeout=30)
+        resp = requests.get(endpoint, timeout=30)
         resp.raise_for_status()
         logging.info(f"[{name}] ✅ {resp.status_code}")
     except Exception as e:

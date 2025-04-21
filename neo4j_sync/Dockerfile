@@ -8,4 +8,4 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 COPY . .
 
-CMD ["python", "neo4j_ingestor.py"]
+CMD ["uvicorn neo4j_ingestor:app --host 0.0.0.0 -port 8003"]

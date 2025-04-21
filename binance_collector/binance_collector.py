@@ -2,10 +2,11 @@
 import os
 import time
 import requests
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from influxdb_client import InfluxDBClient, Point, WritePrecision
 from influxdb_client.client.write_api import SYNCHRONOUS
 from dotenv import load_dotenv
+from fastapi import FastAPI
 
 load_dotenv()
 
@@ -13,6 +14,8 @@ INFLUX_URL = os.getenv("INFLUX_URL")
 INFLUX_TOKEN = os.getenv("INFLUX_TOKEN")
 INFLUX_ORG = os.getenv("INFLUX_ORG")
 BUCKET = os.getenv("INFLUX_BUCKET", "Sentry")
+
+app=FastAPI()
 
 BASE_URL = "https://api.binance.com"
 OHLC_ENDPOINT = "/api/v3/klines"
@@ -49,7 +52,7 @@ def fetch_ohlcv(symbol, interval="1m", start=None, end=None, limit=1000):
 
 def store_to_influx(symbol, ohlcv_data):
     for candle in ohlcv_data:
-        ts = datetime.utcfromtimestamp(candle[0] / 1000).isoformat()
+        ts = datetime.fromtimestamp(candle[0] / 1000, tz=timezone.utc).isoformat()
         p = (
             Point("candles")
             .tag("symbol", symbol)
@@ -62,7 +65,32 @@ def store_to_influx(symbol, ohlcv_data):
         )
         write_api.write(bucket=BUCKET, record=p)
         print(f"[✓] {symbol} @ {ts} | {datetime.utcnow().isoformat()}")
+# if __name__ == "__main__":
+#     mode = os.getenv("MODE")
+#     if mode == "live":
+#         print("[MODE] Running in live mode...")
+#         run_live()
+#     else:
+#         print("[MODE] Backfilling historical data...")
+#         run_backfill(days=7)
+#         print("[✓] Backfill complete.")
 
+
+@app.get("/")
+def home():
+    return{"status":"ok","msg":"Binance Collector"}
+
+@app.get('/live')
+def run_live():
+    for symbol in SYMBOLS:
+        data = fetch_ohlcv(symbol, limit=1)
+        if data:
+            store_to_influx(symbol, data)
+        else:
+            print(f"[!] No data received for {symbol}")
+    print("[✓] Binance snapshot written")
+    
+@app.get("/backfill")
 def run_backfill(days=7):
     interval_minutes = 1
     delta = timedelta(minutes=interval_minutes)
@@ -77,22 +105,3 @@ def run_backfill(days=7):
                 store_to_influx(symbol, candles)
             start += delta * len(candles) if candles else delta * 1000
             time.sleep(0.25)  # avoid rate limits
-
-def run_live():
-    for symbol in SYMBOLS:
-        data = fetch_ohlcv(symbol, limit=1)
-        if data:
-            store_to_influx(symbol, data)
-        else:
-            print(f"[!] No data received for {symbol}")
-    print("[✓] Binance snapshot written")
-
-if __name__ == "__main__":
-    mode = os.getenv("MODE")
-    if mode == "live":
-        print("[MODE] Running in live mode...")
-        run_live()
-    else:
-        print("[MODE] Backfilling historical data...")
-        run_backfill(days=7)
-        print("[✓] Backfill complete.")

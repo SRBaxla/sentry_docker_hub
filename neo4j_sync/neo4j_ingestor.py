@@ -4,6 +4,7 @@ from datetime import timedelta
 from dotenv import load_dotenv
 from neo4j import GraphDatabase
 from influxdb_client import InfluxDBClient
+from fastapi import FastAPI
 
 load_dotenv()
 
@@ -15,6 +16,8 @@ INFLUX_URL = os.getenv("INFLUX_URL")
 INFLUX_TOKEN = os.getenv("INFLUX_TOKEN")
 INFLUX_ORG = os.getenv("INFLUX_ORG")
 BUCKET = os.getenv("INFLUX_BUCKET", "Sentry")
+
+app=FastAPI()
 
 print(INFLUX_ORG)
 print(INFLUX_TOKEN)
@@ -35,6 +38,11 @@ def get_sentiment_rows(hours=24):
     '''
     return query_api.query(flux)
 
+@app.get("/")
+def home():
+    return{"status":"ok","msg":"Neo4j Synchronizor"}
+
+@app.get("/sync")
 def push_to_neo4j(records):
     with db.session() as session:
         for table in records:
@@ -66,9 +74,9 @@ def push_to_neo4j(records):
                     "neg": negative
                 })
 
-if __name__ == "__main__":
-    print("[↪] Fetching recent sentiment snapshots...")
-    records = get_sentiment_rows(hours=24)
-    print("[⇨] Pushing sentiment relationships to Neo4j...")
-    push_to_neo4j(records)
-    print("[✓] Done!")
+# if __name__ == "__main__":
+#     print("[↪] Fetching recent sentiment snapshots...")
+#     records = get_sentiment_rows(hours=24)
+#     print("[⇨] Pushing sentiment relationships to Neo4j...")
+#     push_to_neo4j(records)
+#     print("[✓] Done!")
