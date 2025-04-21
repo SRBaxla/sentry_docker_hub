@@ -13,4 +13,4 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY . .
 
 # Default execution command
-CMD ["python binance_collector:app -host 0.0.0.0 -port 8002"]
+CMD ["uvicorn", "binance_collector:app", "--host", "0.0.0.0", "--port", "8002"]

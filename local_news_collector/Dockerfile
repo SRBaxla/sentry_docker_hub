@@ -12,4 +12,4 @@ RUN apt-get update && apt-get install -y curl wget
 RUN pip install python-dotenv hf_xet
 
 COPY . .
-CMD ["uvicorn collector:app -host 0.0.0.0 -port 8001"]
+CMD ["uvicorn", "collector:app", "--host", "0.0.0.0", "--port", "8001"]
