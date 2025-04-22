@@ -2,3 +2,4 @@ influxdb-client
 neo4j
 python-dotenv
 fastapi
+uvicorn

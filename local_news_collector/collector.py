@@ -67,7 +67,7 @@ def run_collector():
             print(f"[SKIP] {source_id} not trusted")
             continue
 
-        sentiment = analyze_sentiment(item["title"] + "\n" + item.get("text", ""))
+        sentiment = get_sentiment(item["title"] + "\n" + item.get("text", ""))
         ts = item["published"]
 
         p = (

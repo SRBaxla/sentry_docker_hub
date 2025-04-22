@@ -1,9 +1,8 @@
-version: '3.8'
 services:
   influxdb:
     image: influxdb:2.7
     ports:
-      - "8086:8086"  # <-- this line is missing
+      - "8086:8086"
     volumes:
       - influxdb_data:/var/lib/influxdb2
       - influxdb_backup:/backups
@@ -17,12 +16,12 @@ services:
       - "8001:8001"
     depends_on:
       - influxdb
+      - sentiment_analyzer
     environment:
       - INFLUX_URL=http://influxdb:8086
       - INFLUX_TOKEN=${INFLUX_TOKEN}
       - INFLUX_ORG=${INFLUX_ORG}
       - INFLUX_BUCKET=Sentry
-    command: python collector.py
 
   binance_collector:
     build: ./binance_collector
@@ -40,22 +39,23 @@ services:
     image: neo4j:5.7
     ports:
       - "7474:7474"
-      - "7687:7687"  # <-- this line is missing
+      - "7687:7687"
     volumes:
       - neo4j_data:/data
       - neo4j_import:/import
     environment:
       - NEO4J_AUTH=neo4j/sentry123
 
-  sentimental_anlyzer:
-    build:
-      context: ./sentimental_anlyzer
-    depends_on:
-      - influxdb
-      - neo4j
+  sentiment_analyzer:
+    build: ./sentiment_analyzer
     ports:
       - "8004:8004"
-    
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8004/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
   orchestrator:
     build:
       context: ./orchestrator
@@ -63,6 +63,7 @@ services:
     depends_on:
       - local_news_collector
       - binance_collector
+      - sentiment_analyzer
       - neo4j_sync
     environment:
       - INFLUX_URL=http://influxdb:8086
@@ -72,7 +73,6 @@ services:
       - NEO4J_URI=bolt://neo4j:7687
       - NEO4J_USER=${NEO4J_USER}
       - NEO4J_PASS=${NEO4J_PASS}
-
 
   neo4j_sync:
     build: ./neo4j_sync
@@ -94,7 +94,6 @@ services:
       - "8005:8005"
     depends_on:
       - influxdb
-      # - local_news_collector  # JSON store available locally
     environment:
       - INFLUX_URL=http://influxdb:8086
       - INFLUX_TOKEN=${INFLUX_TOKEN}
@@ -106,7 +105,7 @@ services:
     depends_on:
       - model_training
     ports:
-      - '5000:5000'
+      - "5000:5000"
     environment:
       - MODEL_PATH=/models/latest
     command: python serve.py
@@ -119,10 +118,10 @@ services:
       - BROKER_API_KEY=${BINANCE_API_KEY}
       - BROKER_SECRET=${BINANCE_API_SECRET}
       - INFERENCE_URL=http://inference_service:5000
-      - BINANCE_BASE_URL=https://testnet.binance.vision  # spot testnet
-      - BINANCE_FUTURES_URL=https://testnet.binancefuture.com  # futures testnet
+      - BINANCE_BASE_URL=https://testnet.binance.vision
+      - BINANCE_FUTURES_URL=https://testnet.binancefuture.com
       - USE_TESTNET=true
-      - TRADING_MODE=spot  # or 'futures'
+      - TRADING_MODE=spot
     command: python executor.py
 
   backup_service:

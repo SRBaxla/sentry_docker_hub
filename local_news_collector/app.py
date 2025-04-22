@@ -7,6 +7,7 @@ load_dotenv()
 
 app = FastAPI()
 
+
 @app.get("/")
 def home():
     return {"status":"ok","msg":"Sentry News Collector"}

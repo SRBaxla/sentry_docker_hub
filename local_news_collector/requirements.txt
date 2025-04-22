@@ -4,8 +4,10 @@ influxdb-client
 praw      # for Reddit API usage
 GoogleNews
 python-dateutil
+python-dotenv
 beautifulsoup4
 newspaper3k
 dateparser
 lxml==4.9.3  # Stable and often available as a wheel on all OSes
 fastapi
+uvicorn[standard]

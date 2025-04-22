@@ -1,4 +1,0 @@
-influxdb-client==1.41.0
-neo4j==5.15.0
-requests==2.31.0
-python-dotenv==1.0.1
