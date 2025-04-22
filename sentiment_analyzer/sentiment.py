@@ -1,11 +1,18 @@
 from transformers import AutoTokenizer, AutoModelForSequenceClassification
 import torch
+from fastapi import FastAPI
 
+app=FastAPI()
 # Load FinBERT once
 tokenizer = AutoTokenizer.from_pretrained("ProsusAI/finbert")
 model = AutoModelForSequenceClassification.from_pretrained("ProsusAI/finbert")
 model.eval()
 
+@app.get('/')
+def home():
+    return{"status":"ok","msg":"Sentiment analyzer"}
+
+@app.get('/analyze')
 def analyze_sentiment(text: str) -> dict:
     inputs = tokenizer(text, return_tensors="pt", truncation=True)
     with torch.no_grad():

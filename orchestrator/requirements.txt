@@ -3,3 +3,4 @@ apscheduler
 influxdb-client
 neo4j
 requests
+tenacity
