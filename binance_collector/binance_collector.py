@@ -90,6 +90,11 @@ def run_live():
             print(f"[!] No data received for {symbol}")
     print("[✓] Binance snapshot written")
     
+@app.get("/health")
+def health():
+    return {"status": "ok"}
+
+
 @app.get("/backfill")
 def run_backfill(days=7):
     interval_minutes = 1

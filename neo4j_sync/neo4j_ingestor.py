@@ -42,6 +42,10 @@ def get_sentiment_rows(hours=24):
 def home():
     return{"status":"ok","msg":"Neo4j Synchronizor"}
 
+@app.get("/health")
+def health():
+    return {"status": "ok"}
+
 @app.get("/sync")
 def push_to_neo4j(records):
     with db.session() as session:

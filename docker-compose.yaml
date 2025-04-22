@@ -47,6 +47,15 @@ services:
     environment:
       - NEO4J_AUTH=neo4j/sentry123
 
+  sentimental_anlyzer:
+    build:
+      context: ./sentimental_anlyzer
+    depends_on:
+      - influxdb
+      - neo4j
+    ports:
+      - "8004:8004"
+    
   orchestrator:
     build:
       context: ./orchestrator
