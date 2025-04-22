@@ -14,10 +14,10 @@ BACKFILL_URL = os.getenv("BACKFILL_URL", "http://binance_collector:8002/backfill
 TRAIN_URL    = os.getenv("TRAIN_URL",    "http://model_training:8005/train")
 
 @retry(stop=stop_after_attempt(3), wait=wait_exponential(multiplier=1, min=2, max=10))
-def post(endpoint: str, name: str):
+def trigger(endpoint: str, name: str):
     try:
-        logging.info(f"[{name}] ▶️ POST {endpoint}")
-        resp = requests.post(endpoint, timeout=30)
+        logging.info(f"[{name}] ▶️ GET {endpoint}")
+        resp = requests.get(endpoint, timeout=30)
         resp.raise_for_status()
         logging.info(f"[{name}] ✅ {resp.status_code}")
     except Exception as e:
@@ -25,16 +25,17 @@ def post(endpoint: str, name: str):
         raise
 
 def run_news_collector():
-    post(NEWS_URL, "News")
+    trigger(NEWS_URL, "News")
 
 def run_neo4j_ingestor():
-    post(NEO4J_URL, "Neo4j")
+    trigger(NEO4J_URL, "Neo4j")
 
 def run_backfill():
-    post(BACKFILL_URL, "Backfill")
+    trigger(BACKFILL_URL, "Backfill")
 
 def run_model_training():
-    post(TRAIN_URL, "Model")
+    trigger(TRAIN_URL, "Model")
+
 
 # Schedule: cron-style
 scheduler.add_job(run_news_collector,     'cron', minute=0)        # Every hour
