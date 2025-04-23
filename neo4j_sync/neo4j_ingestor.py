@@ -5,8 +5,47 @@ from dotenv import load_dotenv
 from neo4j import GraphDatabase
 from influxdb_client import InfluxDBClient
 from fastapi import FastAPI
+from neo4j import GraphDatabase
+import os
+from datetime import datetime
 
 load_dotenv()
+
+driver = GraphDatabase.driver(
+    os.getenv("NEO4J_URI"),
+    auth=(os.getenv("NEO4J_USER"), os.getenv("NEO4J_PASS"))
+)
+
+def push_correlations(edges):
+    query = """
+    UNWIND $edges AS edge
+    MERGE (a:Coin {symbol: edge.source})
+    MERGE (b:Coin {symbol: edge.target})
+    MERGE (a)-[r:CORRELATED {
+        type: edge.feature,
+        timestamp: $now
+    }]->(b)
+    SET r.strength = edge.strength
+    """
+    with driver.session() as session:
+        session.run(query, edges=edges, now=datetime.utcnow().isoformat())
+
+def push_sentiment_edges(sentiments):
+    query = """
+    UNWIND $edges AS edge
+    MERGE (c:Coin {symbol: edge.symbol})
+    MERGE (m:Market {name: 'Crypto'})
+    MERGE (c)-[s:SENTIMENT {
+        polarity: edge.polarity,
+        source: edge.source,
+        timestamp: $now
+    }]->(m)
+    SET s.score = edge.score
+    """
+    with driver.session() as session:
+        session.run(query, edges=sentiments, now=datetime.utcnow().isoformat())
+
+
 
 NEO4J_URI = os.getenv("NEO4J_URI", "bolt://neo4j:7687")
 NEO4J_USER = os.getenv("NEO4J_USER", "neo4j")
@@ -19,9 +58,9 @@ BUCKET = os.getenv("INFLUX_BUCKET", "Sentry")
 
 app=FastAPI()
 
-print(INFLUX_ORG)
-print(INFLUX_TOKEN)
-print(INFLUX_URL)
+# print(INFLUX_ORG)
+# print(INFLUX_TOKEN)
+# print(INFLUX_URL)
 # Clients
 db = GraphDatabase.driver(NEO4J_URI, auth=(NEO4J_USER, NEO4J_PASS))
 influx = InfluxDBClient(url=INFLUX_URL, token=INFLUX_TOKEN, org=INFLUX_ORG)
