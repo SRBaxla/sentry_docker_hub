@@ -85,6 +85,43 @@ def home():
 def health():
     return {"status": "ok"}
 
+@app.get("/push_sentiment")
+def push_sentiment_edges(sentiments):
+    query = """
+    UNWIND $edges AS edge
+    MERGE (p:Person {name: edge.author})
+    MERGE (c:Crypto {symbol: edge.symbol})
+    MERGE (a:Article {id: edge.article_id, title: edge.title})
+    MERGE (p)-[:WROTE]->(a)
+    MERGE (a)-[:ABOUT]->(c)
+    MERGE (p)-[s:SENTIMENT {
+        score: edge.score,
+        label: edge.polarity,
+        timestamp: $now
+    }]->(c)
+    SET s.score = edge.score
+    """
+    with driver.session() as session:
+        session.run(query, edges=sentiments, now=datetime.utcnow().isoformat())
+
+
+
+@app.get("/push_correlations")
+def push_correlations(edges):
+    query = """
+    UNWIND $edges AS edge
+    MERGE (a:Coin {symbol: edge.source})
+    MERGE (b:Coin {symbol: edge.target})
+    MERGE (a)-[r:CORRELATED {
+        type: edge.feature,
+        timestamp: $now
+    }]->(b)
+    SET r.strength = edge.strength
+    """
+    with driver.session() as session:
+        session.run(query, edges=edges, now=datetime.utcnow().isoformat())
+
+
 @app.get("/sync")
 def sync(hours: int = 24):
     records = get_sentiment_rows(hours=hours)

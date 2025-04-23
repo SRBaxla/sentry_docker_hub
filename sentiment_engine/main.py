@@ -2,6 +2,7 @@ from fastapi import FastAPI
 from pydantic import BaseModel
 from sentiment_sync import sync_sentiment_to_graph
 
+
 app = FastAPI()
 
 # In-memory cache
