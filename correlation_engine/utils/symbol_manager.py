@@ -9,7 +9,7 @@ INFLUX_BUCKET = "Sentry"
 client = InfluxDBClient(url=INFLUX_URL, token=INFLUX_TOKEN, org=INFLUX_ORG)
 query_api = client.query_api()
 
-def get_all_active_symbols() -> list:
+def get_active_symbols_from_influx() -> list:
     flux = f'''
         import "influxdata/influxdb/schema"
         schema.tagValues(

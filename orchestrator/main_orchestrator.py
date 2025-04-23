@@ -88,8 +88,11 @@ def run_correlation_engine():
 
 def run_sentiment_engine():
     try:
-        analyzer_output = requests.get(SERVICE_ENDPOINTS["Analyzer"], timeout=10).json()
-        trigger_post(SERVICE_ENDPOINTS["Sentiment"], "Sentiment", analyzer_output)
+        analyzer_output = requests.get(SERVICE_ENDPOINTS["Analyzer"].replace("/analyze", "/latest_sentiment"), timeout=10).json()
+        if analyzer_output:
+            trigger_post(SERVICE_ENDPOINTS["Sentiment"], "Sentiment", analyzer_output)
+        else:
+            logging.warning("[Sentiment] ⚠️ No fresh sentiment data available")
     except Exception as e:
         logging.error(f"[Analyzer→Sentiment] ❌ Failed to sync: {e}")
 

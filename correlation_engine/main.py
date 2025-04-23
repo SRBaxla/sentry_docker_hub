@@ -1,5 +1,5 @@
 from fastapi import FastAPI
-from correlation_engine import generate_feature_correlations
+from correlation_runner import generate_feature_correlations
 from ..utils.symbol_manager import get_all_active_symbols
 
 app = FastAPI()

@@ -1,4 +1,4 @@
-from correlation_engine.influx_feature_loader import load_feature
+from influx_feature_loader import load_feature
 from neo4j_sync.neo4j_ingestor import push_correlations
 import itertools
 
