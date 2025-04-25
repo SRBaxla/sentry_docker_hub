@@ -1,6 +1,7 @@
 from influx_feature_loader import load_feature
 from neo4j_sync.neo4j_ingestor import push_correlations
 import itertools
+import requests
 
 FEATURES = ["high", "low", "open", "close", "volume"]
 
@@ -19,4 +20,4 @@ def generate_feature_correlations(symbols, duration="-1m"):
                 "feature": feature,
                 "strength": round(float(strength), 4)
             })
-        push_correlations(edges)
+        requests.get(edges)

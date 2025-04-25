@@ -77,6 +77,8 @@ def run_collector():
             .field("positive", float(sentiment.get("positive", 0)))
             .field("neutral", float(sentiment.get("neutral", 0)))
             .field("negative", float(sentiment.get("negative", 0)))
+            .field("trust_score",float(0.7))
+            .field("author", item["author"])
             .time(ts, WritePrecision.S)
         )
 

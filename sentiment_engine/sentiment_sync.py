@@ -9,4 +9,4 @@ def sync_sentiment_to_graph(sentiment_data):
         ...
     ]
     """
-    push_sentiment_edges(sentiment_data)
+    requests.get()  # (sentiment_data)

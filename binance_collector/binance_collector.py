@@ -6,6 +6,7 @@ from datetime import datetime, timedelta, timezone
 from influxdb_client import InfluxDBClient, Point, WritePrecision
 from influxdb_client.client.write_api import SYNCHRONOUS
 from dotenv import load_dotenv
+from utils.symbol_manager import get_active_binance_symbols
 from fastapi import FastAPI
 
 load_dotenv()
@@ -23,10 +24,7 @@ print(INFLUX_ORG)
 print(INFLUX_TOKEN)
 print(INFLUX_URL)
 
-SYMBOLS = [
-    "BTCUSDT", "ETHUSDT", "BNBUSDT", "XRPUSDT", "SOLUSDT", "DOGEUSDT",
-    "ADAUSDT", "AVAXUSDT", "SHIBUSDT", "DOTUSDT"
-]
+SYMBOLS = get_active_binance_symbols()
 
 client = InfluxDBClient(url=INFLUX_URL, token=INFLUX_TOKEN, org=INFLUX_ORG)
 write_api = client.write_api(write_options=SYNCHRONOUS)
@@ -83,7 +81,7 @@ def home():
 @app.get('/live')
 def run_live():
     for symbol in SYMBOLS:
-        data = fetch_ohlcv(symbol, limit=1)
+        data = fetch_ohlcv(symbol, limit=1000)
         if data:
             store_to_influx(symbol, data)
         else:
