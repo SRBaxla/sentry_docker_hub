@@ -4,3 +4,5 @@ neo4j
 influxdb-client
 pydantic
 pandas
+requests
+py2neo 
