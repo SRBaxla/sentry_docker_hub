@@ -7,7 +7,9 @@ from itertools import combinations
 
 import pandas as pd
 from influxdb_client import InfluxDBClient, Point, WritePrecision
-from influxdb_client.client.write_api import WriteOptions, SYNCHRONOUS
+from influxdb_client.client.write_api import WriteOptions
+# parallelize keyword generation lightly
+from concurrent.futures import ThreadPoolExecutor
 from utils.influx_writer import get_influx_client
 
 # ─── CONFIG ────────────────────────────────────────────────────────────────
@@ -23,7 +25,15 @@ CORR_WINDOW      = "60m"   # how far back to pull closes for correlation
 # ─── CLIENT SETUP ─────────────────────────────────────────────────────────
 client    = get_influx_client()
 query_api = client.query_api()
-write_api = client.write_api(write_options=SYNCHRONOUS)
+opts = WriteOptions(
+    write_type="batching",
+    batch_size=500,
+    flush_interval=5_000,      # flush every 5 seconds
+    jitter_interval=2_000,
+    max_retries=3,
+    max_close_wait=2_000       # wait up to 2 seconds when closing
+)
+write_api = client.write_api(write_options=opts)
 
 # ─── STEP 1: GET ALL SYMBOLS ───────────────────────────────────────────────
 def fetch_symbols():
@@ -107,8 +117,7 @@ def generate_keywords(symbol: str):
 def write_symbol_metadata(symbols):
     now = datetime.now(timezone.utc).isoformat()
     buffer = []
-    # parallelize keyword generation lightly
-    from concurrent.futures import ThreadPoolExecutor
+    
     with ThreadPoolExecutor(max_workers=8) as pool:
         for sym, kws in zip(symbols, pool.map(generate_keywords, symbols)):
             pt = (
