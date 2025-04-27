@@ -1,6 +1,7 @@
 import asyncio
 from concurrent.futures import ThreadPoolExecutor
 from influxdb_client import InfluxDBClient
+from influxdb_client.client.write_api import SYNCHRONOUS
 import os
 
 MAX_WORKERS = 4  # Number of threads
@@ -25,7 +26,7 @@ async def async_write_batches(data_points, bucket_name):
         return
 
     client = get_influx_client()
-    write_api = client.write_api(write_options=None)
+    write_api = client.write_api(write_options=SYNCHRONOUS)
 
     # Split into manageable batches
     batches = [data_points[i:i+BATCH_SIZE] for i in range(0, len(data_points), BATCH_SIZE)]

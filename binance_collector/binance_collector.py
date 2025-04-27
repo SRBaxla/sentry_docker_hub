@@ -128,7 +128,7 @@ async def run_backfill_worker(days: int):
     tasks = []
 
     for symbol in SYMBOLS:
-        end = datetime.utcnow()
+        end = datetime.now()
         start = end - timedelta(days=int(days))
 
         while start < end:
