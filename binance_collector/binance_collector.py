@@ -11,6 +11,7 @@ from dotenv import load_dotenv
 from utils.symbol_manager import get_active_binance_symbols
 from fastapi import FastAPI, Query
 from utils.influx_writer import async_write_batches, get_influx_client
+from contextlib import asynccontextmanager
 
 load_dotenv()
 
@@ -19,7 +20,16 @@ INFLUX_TOKEN = os.getenv("INFLUX_TOKEN")
 INFLUX_ORG = os.getenv("INFLUX_ORG")
 INFLUX_BUCKET = "Sentry"
 
-app=FastAPI()
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # Read your env-driven settings once
+    days = int(os.getenv("BACKFILL_DAYS", "7"))
+    concurrency = int(os.getenv("BACKFILL_CONCURRENCY", "15"))
+    # Kick off live backfill in background
+    asyncio.create_task(live_backfill_loop(days, concurrency))
+    yield
+    
+app = FastAPI(lifespan=lifespan)
 
 BASE_URL = "https://api.binance.com"
 OHLC_ENDPOINT = "/api/v3/klines"
@@ -269,6 +279,9 @@ async def start_live_backfill(
             f"{days}d history, {concurrency} concurrent symbols."
         )
     }
+    
+
+    
 # Entry point
 if __name__ == "__main__":
     import uvicorn
