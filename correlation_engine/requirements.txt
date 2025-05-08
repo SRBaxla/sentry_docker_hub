@@ -6,3 +6,4 @@ pydantic
 pandas
 requests
 py2neo 
+python-dotenv

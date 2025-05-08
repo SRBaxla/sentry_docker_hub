@@ -12,6 +12,11 @@ from utils.symbol_manager import get_active_binance_symbols
 from fastapi import FastAPI, Query
 from utils.influx_writer import async_write_batches, get_influx_client
 from contextlib import asynccontextmanager
+from influxdb_client.client.query_api import QueryApi
+from datetime import datetime, timedelta, timezone
+from influxdb_client.rest import ApiException
+import urllib3
+
 
 load_dotenv()
 
@@ -20,10 +25,11 @@ INFLUX_TOKEN = os.getenv("INFLUX_TOKEN")
 INFLUX_ORG = os.getenv("INFLUX_ORG")
 INFLUX_BUCKET = "Sentry"
 
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # Read your env-driven settings once
-    days = int(os.getenv("BACKFILL_DAYS", "7"))
+    days = int(os.getenv("BACKFILL_DAYS", "30"))
     concurrency = int(os.getenv("BACKFILL_CONCURRENCY", "15"))
     # Kick off live backfill in background
     asyncio.create_task(live_backfill_loop(days, concurrency))
@@ -38,23 +44,94 @@ SYMBOLS = get_active_binance_symbols()
 
 client = get_influx_client()
 write_api = client.write_api(write_options=SYNCHRONOUS)
-
+query_api: QueryApi = client.query_api()
 # Shared Influx client (not used directly here)
-_client = get_influx_client()
-        
+# _client = get_influx_client()
+
+
+def get_missing_minutes(
+    symbol: str,
+    query_api: QueryApi,
+    bucket: str,
+    days: int
+) -> list[datetime]:
+    """
+    Return a sorted list of 1-minute interval start times that have zero points
+    in the last `days` days for this symbol.
+    """
+    flux = f'''
+    from(bucket: "{bucket}")
+      |> range(start: -{days}d)
+      |> filter(fn: (r) =>
+           r._measurement == "candles"
+        and r.symbol == "{symbol}"
+        and r._field == "close")
+      |> aggregateWindow(
+           every: 1m,
+           fn: count,
+           createEmpty: true
+        )
+      |> filter(fn: (r) => r._value == 0)
+      |> keep(columns: ["_time"])
+    '''
+    missing = []
+    tables = query_api.query(flux)
+    for table in tables:
+        for rec in table.records:
+            missing.append(rec.get_time().replace(tzinfo=timezone.utc))
+    return sorted(missing)
+
+
+def coalesce_ranges(times: list[datetime]) -> list[tuple[datetime, datetime]]:
+    """
+    Given sorted minute-start times, coalesce contiguous minutes into (start,end) ranges.
+    Each end is exclusive.
+    """
+    if not times:
+        return []
+    ranges = []
+    start = prev = times[0]
+    for t in times[1:]:
+        if t == prev + timedelta(minutes=1):
+            prev = t
+        else:
+            ranges.append((start, prev + timedelta(minutes=1)))
+            start = prev = t
+    ranges.append((start, prev + timedelta(minutes=1)))
+    return ranges
+
+def get_last_timestamp(
+    symbol: str,
+    query_api: QueryApi,
+    bucket: str,
+    days: int
+) -> datetime:
+    flux = f'''
+    from(bucket: "{bucket}")
+      |> range(start: 0)
+      |> filter(fn: (r) => r["_measurement"] == "candles" and r["symbol"] == "{symbol}")
+      |> last()
+    '''
+    try:
+        tables = query_api.query(flux)
+        for table in tables:
+            for record in table.records:
+                return record.get_time().replace(tzinfo=timezone.utc)
+    except (ApiException, urllib3.exceptions.NewConnectionError) as e:
+        print(f"[!] InfluxDB query failed for {symbol}: {e!r}. Falling back to {days}d ago.")
+    # fallback
+    return datetime.now(timezone.utc) - timedelta(days=days)
+
+query_api: QueryApi = client.query_api()
+BACKFILL_DAYS = 7
+
 async def backfill_all_symbols(
-    days: int = 7,
+    days: int = BACKFILL_DAYS,
     interval: str = "1m",
     page_limit: int = 1000,
     concurrency: int = 5
 ):
-    """
-    Backfill historical candles for all active symbols in parallel.
-    Adds per-symbol ETA logging.
-    """
     symbols         = get_active_binance_symbols()
-    end_time        = datetime.now(timezone.utc)
-    start_time      = end_time - timedelta(days=days)
     total_minutes   = days * 24 * 60
     pages_per_symbol= math.ceil(total_minutes / page_limit)
     total_pages     = pages_per_symbol * len(symbols)
@@ -63,57 +140,44 @@ async def backfill_all_symbols(
     page_counter = 0
     counter_lock = asyncio.Lock()
     start_all    = time.perf_counter()
-    
 
     async def _backfill_symbol(symbol: str):
         async with sem:
             nonlocal page_counter
-            cursor = start_time
-            page_index = 0
+            # mark when this symbol’s fill started (for per‐symbol ETA)
             symbol_start = time.perf_counter()
+            # 1) detect missing 1m windows over the last `days`
+            missing = get_missing_minutes(symbol, query_api, INFLUX_BUCKET, days)
+            ranges  = coalesce_ranges(missing)
 
-            while cursor < end_time:
-                page_index += 1
-                next_cursor = min(cursor + timedelta(minutes=page_limit), end_time)
-
-                # Fetch one page of raw klines
+            # 2) fill each gap in one bulk fetch/write
+            for start, end in ranges:
                 candles = fetch_ohlcv(
                     symbol,
                     interval=interval,
-                    start=cursor,
-                    end=next_cursor,
-                    limit=page_limit
+                    start=start,
+                    end=end,
+                    # +1 minute to include the final bucket
+                    limit=int((end - start).total_seconds() // 60 + 1)
                 )
-                if not candles:
-                    break
+                if candles:
+                    await store_to_influx(symbol, candles)
 
-                # Write Points to InfluxDB
-                await store_to_influx(symbol, candles)
-
-                # # ETA logging
-                # elapsed = time.perf_counter() - symbol_start
-                # eta = elapsed / page_index * (pages_per_symbol - page_index)
-                # print(f"[->] {symbol}: page {page_index}/{pages_per_symbol}, ETA {eta:.1f}s")
-                # update overall counter & compute ETAs
+                # ETA logging (optional)
                 async with counter_lock:
                     page_counter += 1
                     elapsed_all = time.perf_counter() - start_all
-                    eta_all     = (elapsed_all / page_counter)*(total_pages - page_counter)
-
+                    eta_all     = (elapsed_all / page_counter) * (total_pages - page_counter)
                 elapsed_sym = time.perf_counter() - symbol_start
-                eta_sym     = (elapsed_sym / page_index)*(pages_per_symbol - page_index)
+                eta_sym     = (elapsed_sym / page_counter) * (pages_per_symbol - page_counter)
                 print(
-                  f"[->] {symbol}: page {page_index}/{pages_per_symbol}, "
-                  f"ETA {eta_sym:.1f}s | overall {page_counter}/{total_pages}, ETA {eta_all:.1f}s"
+                  f"[→] {symbol}: filled {len(candles)}m from {start:%H:%M} to {end:%H:%M} | "
+                  f"overall {page_counter}/{total_pages}, ETA {eta_all:.1f}s"
                 )
-                # Advance past last candle timestamp
-                last_ts_ms = candles[-1][0]
-                cursor = datetime.fromtimestamp(last_ts_ms/1000, tz=timezone.utc) + timedelta(milliseconds=1)
 
     await asyncio.gather(*( _backfill_symbol(sym) for sym in symbols ))
-
-
-
+    
+    
 async def live_backfill_loop(days: int, concurrency: int):
     # 1) initial backfill
     await backfill_all_symbols(days=days, concurrency=concurrency)

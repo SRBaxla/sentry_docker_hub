@@ -11,6 +11,9 @@ from metadata_generator import (
     fetch_symbols,
     write_symbol_metadata
 )
+from dotenv import load_dotenv
+
+load_dotenv()
 
 # Configuration via environment
 FEATURE_DURATION     = os.getenv("FEATURE_DURATION", "-1m")
@@ -74,6 +77,6 @@ async def periodic_price_loop(interval_minutes: int):
         await asyncio.to_thread(write_symbol_metadata, symbols)
         await asyncio.sleep(interval_minutes * 60)
 
-if __name__ == "__main__":
-    import uvicorn
-    uvicorn.run("aggregated_service:app", host="0.0.0.0", port=8001, reload=True)
+# if __name__ == "__main__":
+#     import uvicorn
+#     uvicorn.run("aggregated_service:app", host="0.0.0.0", port=8001, reload=True)

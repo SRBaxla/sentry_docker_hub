@@ -6,6 +6,8 @@ from concurrent.futures import ThreadPoolExecutor
 from influxdb_client import InfluxDBClient
 from influxdb_client.client.write_api import WriteOptions
 from asyncio import get_running_loop
+from dotenv import load_dotenv
+load_dotenv()
 
 # Thread pool for offloading writes
 executor = ThreadPoolExecutor(max_workers=15)

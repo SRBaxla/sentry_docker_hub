@@ -2,6 +2,9 @@ import asyncio
 from concurrent.futures import ThreadPoolExecutor
 from influxdb_client import InfluxDBClient
 import os
+from dotenv import load_dotenv
+
+load_dotenv()
 
 MAX_WORKERS = 4  # Number of threads
 BATCH_SIZE = 5000  # Number of points per write
@@ -15,7 +18,7 @@ INFLUX_BUCKET = "Sentry"
 
 def get_influx_client():
     return InfluxDBClient(
-        url="http://influxdb:8086",  # Change if needed
+        url="http://localhost:8086",  # Change if needed
         token=INFLUX_TOKEN,
         org=INFLUX_ORG
     )

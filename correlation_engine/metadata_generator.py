@@ -11,12 +11,26 @@ from influxdb_client.client.write_api import WriteOptions
 # parallelize keyword generation lightly
 from concurrent.futures import ThreadPoolExecutor
 from utils.influx_writer import get_influx_client
+from influxdb_client.client.query_api import QueryApi
+from datetime import timedelta, timezone
+from dotenv import load_dotenv
+
+load_dotenv()
+# how far back to look when healing (in days)
+HEAL_LOOKBACK_DAYS = int(os.getenv("HEAL_LOOKBACK_DAYS", 7))
+
 
 # ─── CONFIG ────────────────────────────────────────────────────────────────
-INFLUX_URL    = os.getenv("INFLUX_URL",    "http://influxdb:8086")
-INFLUX_TOKEN  = os.getenv("INFLUX_TOKEN")
-INFLUX_ORG    = os.getenv("INFLUX_ORG",    "Sentry")
-INFLUX_BUCKET = os.getenv("INFLUX_BUCKET", "sentry")
+INFLUX_URL    = os.getenv("INFLUX_URL")
+# INFLUX_URL    = "http://influxdb:8086"
+INFLUX_TOKEN  = os.getenv("INFLUX_TOKEN_C")
+INFLUX_ORG    = os.getenv("INFLUX_ORG")
+INFLUX_BUCKET = os.getenv("INFLUX_BUCKET")
+
+print(INFLUX_URL)
+print(INFLUX_TOKEN)
+print(INFLUX_ORG)
+print(INFLUX_BUCKET)
 
 COMMON_BUZZWORDS = ["ETF","DeFi","SEC","Bullish","Bearish","Pump","Crash","Rally","Halving"]
 CHUNK_SIZE       = 500     # tune for your environment
@@ -34,6 +48,26 @@ opts = WriteOptions(
     max_close_wait=2_000       # wait up to 2 seconds when closing
 )
 write_api = client.write_api(write_options=opts)
+
+def get_last_timestamp(measurement: str) -> datetime | None:
+    """
+    Returns the UTC datetime of the last point in `measurement`,
+    scanning only the last HEAL_LOOKBACK_DAYS to keep it fast.
+    """
+    flux = f'''
+    from(bucket: "{INFLUX_BUCKET}")
+      |> range(start: -{HEAL_LOOKBACK_DAYS}d)
+      |> filter(fn: (r) => r._measurement == "{measurement}")
+      |> last()
+    '''
+    try:
+        tables = query_api.query(flux, org=INFLUX_ORG)
+        for table in tables:
+            for record in table.records:
+                return record.get_time().replace(tzinfo=timezone.utc)
+    except Exception as e:
+        print(f"[!] Could not fetch last timestamp for {measurement}: {e}")
+    return None
 
 # ─── STEP 1: GET ALL SYMBOLS ───────────────────────────────────────────────
 def fetch_symbols():
@@ -108,11 +142,33 @@ def generate_keywords(symbol: str):
     base = symbol.rstrip("USDTBUSD")
     name = base.capitalize()
     for c in load_coins():
-        if c["symbol"].upper() == base.upper():
-            name = c["name"]
+        # skip anything that isn’t a dict with a "symbol" key
+        if not isinstance(c, dict):
+            continue
+        sym = c.get("symbol")
+        if not isinstance(sym, str):
+            continue
+        if sym.upper() == base.upper():
+            # found a match, grab its full name (fall back to our default otherwise)
+            name = c.get("name", name)
             break
+
     kws = [name, base.upper(), f"{base.upper()}/USD", f"{name} price", f"{name} news"]
     return kws + COMMON_BUZZWORDS
+
+def fetch_symbols_from_metadata() -> set[str]:
+    """
+    Returns the set of all 'symbol' tag-values already in symbol_metadata.
+    """
+    flux = f'''
+    import "influxdata/influxdb/schema"
+    schema.tagValues(
+      bucket: "{INFLUX_BUCKET}",
+      tag: "symbol",
+      predicate: (r) => r._measurement == "symbol_metadata"
+    )
+    '''
+    return {rec.get_value() for rec in query_api.query_stream(flux, org=INFLUX_ORG)}
 
 def write_symbol_metadata(symbols):
     now = datetime.now(timezone.utc).isoformat()
@@ -148,14 +204,27 @@ def main():
     numeric_cols = df.select_dtypes(include="number").columns
     df = df[numeric_cols]
 
+    # 3) Heal‐aware correlation write
+    now = datetime.now(timezone.utc)
+    last_corr = get_last_timestamp("correlation_snapshot")
+    if last_corr and (now - last_corr) < timedelta(minutes=1):
+        print(f"[*] Correlation up-to-date at {last_corr.isoformat()}, skipping.")
+    else:
+        compute_and_write_correlations(df)
+        print("[+] Correlation snapshots written")
 
-    # 3) Compute & write pairwise correlations
-    compute_and_write_correlations(df)
-    print("[+] Correlation snapshots written")
 
-    # 4) Generate & write symbol keyword metadata
-    write_symbol_metadata(symbols)
-    print("[+] Symbol metadata written")
+
+    # 4) Heal‐aware metadata write
+    existing = fetch_symbols_from_metadata()
+    new_syms = [s for s in symbols if s not in existing]
+
+    if not new_syms:
+        print("[*] No new symbols to tag—skipping metadata.")
+    else:
+        write_symbol_metadata(new_syms)
+        print(f"[+] Metadata written for {len(new_syms)} new symbols")
+
 
         # ─── CLEANUP ─────────────────────────────
     write_api.close()   # stop the background flush thread
