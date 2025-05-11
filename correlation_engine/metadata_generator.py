@@ -21,8 +21,8 @@ HEAL_LOOKBACK_DAYS = int(os.getenv("HEAL_LOOKBACK_DAYS", 7))
 
 
 # ─── CONFIG ────────────────────────────────────────────────────────────────
-INFLUX_URL    = os.getenv("INFLUX_URL")
-# INFLUX_URL    = "http://influxdb:8086"
+# INFLUX_URL    = os.getenv("INFLUX_URL")
+INFLUX_URL    = "http://localhost:8086"
 INFLUX_TOKEN  = os.getenv("INFLUX_TOKEN_C")
 INFLUX_ORG    = os.getenv("INFLUX_ORG")
 INFLUX_BUCKET = os.getenv("INFLUX_BUCKET")
