@@ -10,6 +10,9 @@ from influxdb_client.client.write_api import SYNCHRONOUS
 from dotenv import load_dotenv
 from fastapi import FastAPI, Query, HTTPException
 import requests
+from influxdb_client import InfluxDBClient
+from influxdb_client.client.flux_table import FluxStructureEncoder
+
 load_dotenv()
 
 INFLUX_URL = os.getenv("INFLUX_URL")
@@ -23,14 +26,27 @@ app=FastAPI()
 client = InfluxDBClient(url=INFLUX_URL, token=INFLUX_TOKEN, org=INFLUX_ORG)
 write_api = client.write_api(write_options=SYNCHRONOUS)
 
-# Define keywords per coin
-search_terms = {
-    "BTCUSDT": ["bitcoin", "btc"],
-    "ETHUSDT": ["ethereum", "eth"],
-    "SOLUSDT": ["solana", "sol"],
-    "XRPUSDT": ["xrp"],
-    "DOGEUSDT": ["doge", "dogecoin"]
-}
+def get_dynamic_keywords():
+    query_api=client.query_api()
+    query = f'''
+    from(bucket: "{BUCKET}")
+      |> range(start: -1h)
+      |> filter(fn: (r) => r._measurement == "symbol_metadata" and r._field == "keywords")
+      |> last()
+    '''
+    result = query_api.query(query=query)
+    keywords_by_symbol = {}
+
+    for table in result:
+        for record in table.records:
+            symbol = record.values.get("symbol") or "unknown"
+            raw_keywords = record.get_value()
+            if isinstance(raw_keywords, str):
+                keywords_by_symbol[symbol] = raw_keywords.split(',')
+
+    return keywords_by_symbol
+
+
 
 def get_sentiment(text: str, host: str = ANALYZER_URL) -> dict:
     try:
@@ -53,7 +69,9 @@ def health():
 
 @app.get("/run_collector")
 def run_collector():
+    search_terms = get_dynamic_keywords()
     all_items = []
+
     for symbol, terms in search_terms.items():
         for keyword in terms:
             results = crawl_all(query=keyword, limit=5)
@@ -77,7 +95,7 @@ def run_collector():
             .field("positive", float(sentiment.get("positive", 0)))
             .field("neutral", float(sentiment.get("neutral", 0)))
             .field("negative", float(sentiment.get("negative", 0)))
-            .field("trust_score",float(0.7))
+            .field("trust_score", float(0.7))
             .field("author", item["author"])
             .time(ts, WritePrecision.S)
         )

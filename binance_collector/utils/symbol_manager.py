@@ -5,7 +5,7 @@ def get_active_binance_symbols():
     url = "https://api.binance.com/api/v3/exchangeInfo"
     response = requests.get(url)
     data = response.json()
-
+    print(data)
     symbols = [
         s['symbol'] for s in data['symbols']
         if s['status'] == 'TRADING'
