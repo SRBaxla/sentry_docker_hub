@@ -24,15 +24,22 @@ PRICE_CORR_WINDOW    = os.getenv("PRICE_CORR_WINDOW", "60m")
 FEATURE_INTERVAL = int(os.getenv("FEATURE_INTERVAL_MINUTES", "15"))
 PRICE_INTERVAL   = int(os.getenv("PRICE_INTERVAL_MINUTES", "60"))
 
+# Global flag to check if tasks are already scheduled
+tasks_scheduled = False
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """
     On startup, schedule periodic feature and price correlation tasks.
+    Avoids redundant task scheduling.
     """
-    # Schedule periodic feature correlation
-    asyncio.create_task(periodic_feature_loop(FEATURE_INTERVAL))
-    # Schedule periodic price correlation + metadata
-    asyncio.create_task(periodic_price_loop(PRICE_INTERVAL))
+    global tasks_scheduled
+    if not tasks_scheduled:
+        # Schedule periodic feature correlation
+        asyncio.create_task(periodic_feature_loop(FEATURE_INTERVAL))
+        # Schedule periodic price correlation + metadata
+        asyncio.create_task(periodic_price_loop(PRICE_INTERVAL))
+        tasks_scheduled = True
     yield
     # Optional cleanup can go here
 
