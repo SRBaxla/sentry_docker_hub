@@ -28,6 +28,18 @@ services:
       - influxdb
     env_file:
       - .env
+  crypto-backfill:
+    build: ./binance_backfill
+    env_file:
+      - .env
+
+  alpaca-backfill:
+    build: ./alpaca_stocks
+    env_file:
+      - .env
+    ports:
+      - "8000:8000"
+
 
   neo4j:
     image: neo4j:5.7

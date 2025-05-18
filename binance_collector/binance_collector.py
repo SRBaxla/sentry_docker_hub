@@ -63,14 +63,14 @@ def compute_ohlc(ticks):
 
 # Live Tick Handler
 async def handle_tick(symbol, tick):
-    current_minute = datetime.datetime.utcnow().replace(second=0, microsecond=0)
+    current_minute = datetime.datetime.now(datetime.timezone.utc).replace(second=0, microsecond=0)
     tick_buffer[(symbol, current_minute)].append(tick)
 
 # Candle Writer
 async def candle_writer():
     while True:
         await asyncio.sleep(1)
-        now = datetime.datetime.utcnow().replace(second=0, microsecond=0)
+        now = datetime.datetime.now(datetime.timezone.utc).replace(second=0, microsecond=0)
         expired_keys = [k for k in list(tick_buffer.keys()) if k[1] < now] # Iterate over a copy
         for key in expired_keys:
             symbol, minute = key
@@ -96,7 +96,7 @@ async def lifespan(app: FastAPI):
     days = int(os.getenv("BACKFILL_DAYS", "30"))
 
     # Start your background tasks
-    # backfill_task = asyncio.create_task(run_backfiller(SYMBOLS, days))
+    backfill_task = asyncio.create_task(run_backfiller(SYMBOLS, days))
     websocket_tasks = [asyncio.create_task(websocket_listener(symbol)) for symbol in SYMBOLS]
     candle_writer_task = asyncio.create_task(candle_writer())
 
