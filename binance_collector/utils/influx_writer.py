@@ -8,6 +8,7 @@ from influxdb_client.client.write_api import WriteOptions
 from asyncio import get_running_loop
 from dotenv import load_dotenv
 load_dotenv()
+from influxdb_client import InfluxDBClient, BucketsApi
 
 # Thread pool for offloading writes
 executor = ThreadPoolExecutor(max_workers=15)
@@ -37,6 +38,20 @@ _write_opts = WriteOptions(
     max_close_wait=2_000,      # wait up to 2 s on shutdown
 )
 _write_api = _client.write_api(write_options=_write_opts)
+
+
+buckets_api = _client.buckets_api()
+
+def get_or_create_bucket(bucket_name):
+    buckets = buckets_api.find_buckets().buckets
+    for b in buckets:
+        if b.name == bucket_name:
+            return b
+    # If not found, create it
+    new_bucket = buckets_api.create_bucket(bucket_name=bucket_name, org=INFLUX_ORG)
+    return new_bucket
+
+
 
 def get_influx_client():
     """If you still need a raw client elsewhere."""

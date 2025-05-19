@@ -42,10 +42,17 @@ def get_existing_timestamps(symbol, client, start, end):
         |> filter(fn: (r) => r._measurement == "candles" and r.symbol == "{symbol}" and r._field == "close")
     '''
     result = client.query_api().query(query)
-    timestamps = {record.get_time().replace(tzinfo=None) for table in result for record in table.records}
+    
+    timestamps = {
+        record.get_time()
+        .replace(tzinfo=None, second=0, microsecond=0)  # Align to minute
+        for table in result for record in table.records
+    }
     return timestamps
 
+
 def get_expected_timestamps(start, end):
+    start = start.replace(second=0, microsecond=0)
     current = start
     result = []
     while current <= end:
@@ -98,7 +105,18 @@ async def handle_chunk(symbol, start_t, end_t, session, write_api):
     klines = await fetch_binance_klines_async(session, symbol, start_t, end_t)
     if klines:
         write_to_influx(symbol, klines, write_api)
+
+        # --- Verification ---
+        written_times = {datetime.utcfromtimestamp(k[0] // 1000).replace(second=0, microsecond=0) for k in klines}
+        client = InfluxDBClient(url=INFLUX_URL, token=INFLUX_TOKEN, org=INFLUX_ORG)
+        existing = get_existing_timestamps(symbol, client, start_t, end_t)
+        still_missing = sorted(written_times - existing)
+        if still_missing:
+            print(f"⚠️ After write, still missing {len(still_missing)} timestamps for {symbol}. Example: {still_missing[0]}")
+        client.close()
+
     await asyncio.sleep(RATE_LIMIT_DELAY)
+
 
 async def backfill_symbol_async(symbol, client, write_api, start_dt, end_dt, session):
     print(f"Backfilling {symbol}...")
@@ -119,6 +137,14 @@ async def backfill_symbol_async(symbol, client, write_api, start_dt, end_dt, ses
         end_t = chunk[-1] + timedelta(minutes=1)
         tasks.append(asyncio.create_task(handle_chunk(symbol, start_t, end_t, session, write_api)))
     await asyncio.gather(*tasks)
+    # Recheck post-fill
+    final_existing = get_existing_timestamps(symbol, client, start_dt, end_dt)
+    final_missing = [ts for ts in expected if ts not in final_existing]
+    if final_missing:
+        print(f"❌ Final check: {len(final_missing)} missing candles for {symbol}")
+    else:
+        print(f"✅ {symbol} backfilled completely. All candles present.")
+
 
 # --- FASTAPI LIFESPAN ---
 @asynccontextmanager
@@ -126,6 +152,8 @@ async def lifespan(app: FastAPI):
     symbols = read_symbols_from_csv(CSV_PATH)
     start_dt = datetime.strptime(START_DATE, "%Y-%m-%d")
     end_dt = datetime.strptime(END_DATE, "%Y-%m-%d") + timedelta(days=1)
+    start_dt = start_dt.replace(second=0, microsecond=0)
+    end_dt = end_dt.replace(second=0, microsecond=0)
 
     client = InfluxDBClient(url=INFLUX_URL, token=INFLUX_TOKEN, org=INFLUX_ORG)
     write_api = client.write_api(write_options=SYNCHRONOUS)

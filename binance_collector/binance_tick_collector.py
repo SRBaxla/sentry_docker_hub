@@ -5,12 +5,12 @@ import time
 import asyncio
 import random
 import logging
-import datetime
 import traceback
 import aiohttp
 
+from datetime import datetime, timezone
 from contextlib import asynccontextmanager
-from fastapi import FastAPI, Query
+from fastapi import FastAPI
 from fastapi.responses import JSONResponse
 from typing import List, Dict
 
@@ -54,15 +54,15 @@ async def process_websocket_message(symbol: str, message: str):
     try:
         data = json.loads(message)
         if 't' in data and 'p' in data and 'q' in data:
-            timestamp = datetime.datetime.fromtimestamp(data['t'] / 1000, tz=datetime.timezone.utc)
+            timestamp = datetime.utcfromtimestamp(data['t'] / 1000).replace(tzinfo=timezone.utc)
             price = float(data['p'])
             volume = float(data['q'])
             tick = {'price': price, 'volume': volume}
             await handle_tick(symbol, tick, timestamp)
     except json.JSONDecodeError as e:
-        logger.info(f"[ERROR] Error decoding websocket message for {symbol}: {e}")
+        logger.info(f"[ERROR] JSON decoding error for {symbol}: {e}")
     except Exception as e:
-        logger.info(f"[ERROR] Error processing websocket message for {symbol}: {e}")
+        logger.info(f"[ERROR] Error processing message for {symbol}: {e}")
         traceback.print_exc()
 
 async def websocket_listener(symbol: str):
@@ -76,19 +76,19 @@ async def websocket_listener(symbol: str):
         try:
             session = aiohttp.ClientSession()
             async with session.ws_connect(ws_url) as ws:
-                logger.info(f"[WS] Websocket connected for {symbol}")
+                logger.info(f"[WS] WebSocket connected for {symbol}")
                 async for msg in ws:
                     if not ACTIVE_SYMBOLS.get(symbol, False):
                         break
                     if msg.type == aiohttp.WSMsgType.TEXT:
                         await process_websocket_message(symbol, msg.data)
                     elif msg.type in (aiohttp.WSMsgType.CLOSED, aiohttp.WSMsgType.ERROR):
-                        logger.info(f"[WS] Websocket disconnected for {symbol}: {ws.close_code}, {ws.exception()}")
+                        logger.info(f"[WS] Disconnected for {symbol}: {ws.close_code}, {ws.exception()}")
                         break
         except aiohttp.ClientConnectionError as e:
             logger.info(f"[ERROR] Connection error for {symbol}: {e}")
         except asyncio.CancelledError:
-            logger.info(f"[WS] Websocket listener cancelled for {symbol}")
+            logger.info(f"[WS] WebSocket listener cancelled for {symbol}")
             break
         except Exception as e:
             logger.info(f"[ERROR] Unexpected error for {symbol}: {e}")
@@ -99,7 +99,7 @@ async def websocket_listener(symbol: str):
             if session and not session.closed:
                 await session.close()
         jitter = random.uniform(0, 3)
-        logger.info(f"[WS] Reconnecting to websocket for {symbol} in {RETRY_DELAY + jitter:.2f} seconds...")
+        logger.info(f"[WS] Reconnecting for {symbol} in {RETRY_DELAY + jitter:.2f} seconds...")
         await asyncio.sleep(RETRY_DELAY + jitter)
 
 # --- App Lifespan ---
@@ -132,6 +132,18 @@ async def enable_symbol(symbol: str):
 async def disable_symbol(symbol: str):
     ACTIVE_SYMBOLS[symbol.upper()] = False
     return JSONResponse(content={"status": f"Symbol {symbol.upper()} disabled"})
+
+@app.post("/symbols/enable_all")
+async def enable_all_symbols():
+    for symbol in ACTIVE_SYMBOLS.keys():
+        ACTIVE_SYMBOLS[symbol] = True
+    return JSONResponse(content={"status": "All symbols enabled"})
+
+@app.post("/symbols/disable_all")
+async def disable_all_symbols():
+    for symbol in ACTIVE_SYMBOLS.keys():
+        ACTIVE_SYMBOLS[symbol] = False
+    return JSONResponse(content={"status": "All symbols disabled"})
 
 @app.get("/symbol/status")
 async def symbol_status():

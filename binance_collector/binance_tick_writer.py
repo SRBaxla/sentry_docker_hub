@@ -40,18 +40,19 @@ background_tasks = []
 
 # Live Tick Handler
 async def handle_tick(symbol, tick, timestamp):
+    bucket_name = f"Sentry_{symbol.lower()}"  # Dynamic bucket name per symbol
+    measurement_name = f"ticks_{symbol.lower()}"  # Dynamic measurement name per symbol
+    
     point = (
-        Point("candles")
+        Point(measurement_name)
         .tag("symbol", symbol)
         .time(timestamp, write_precision=WritePrecision.S)
-        .field("open", tick['price'])
-        .field("high", tick['price'])
-        .field("low", tick['price'])
-        .field("close", tick['price'])
+        .field("price", tick['price'])
         .field("volume", tick['volume'])
     )
-    await async_write_batches(data_points=[point], bucket_name=INFLUX_BUCKET)
-    logger.info(f"[TICK] Wrote tick for {symbol} at {timestamp}")
+    await async_write_batches(data_points=[point], bucket_name=bucket_name)
+    logger.info(f"[TICK] Wrote tick for {symbol} at {timestamp}: price={tick['price']}, volume={tick['volume']} into bucket {bucket_name}")
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
