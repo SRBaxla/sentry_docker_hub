@@ -32,6 +32,8 @@ services:
     build: ./binance_backfill
     env_file:
       - .env
+    depends_on:
+      - influxdb
 
   alpaca-backfill:
     build: ./alpaca_stocks
@@ -39,6 +41,8 @@ services:
       - .env
     ports:
       - "8000:8000"
+    depends_on:
+      - influxdb
 
 
   neo4j:
