@@ -14,10 +14,7 @@ from dotenv import load_dotenv
 import os
 import logging
 import sys
-import aiohttp
-# from aiohttp import TCPConnector
-# from aiohttp.resolver import AsyncResolver
-
+from typing import List, Optional
 
 # Fix Windows event loop policy
 if sys.platform.startswith("win"):
@@ -31,34 +28,33 @@ INFLUX_URL = os.getenv("INFLUX_URL")
 INFLUX_TOKEN = os.getenv("INFLUX_TOKEN_C")
 INFLUX_ORG = os.getenv("INFLUX_ORG")
 INFLUX_BUCKET = "US_stocks"
-
+MEASUREMENT = "US_stocks"
 
 CONCURRENCY_LIMIT = 8
 RETRY_LIMIT = 2
 
 logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
+logger = logging.getLogger("alpaca_backfill")
 
-logger.info(INFLUX_BUCKET)
-logger.info(INFLUX_URL)
-logger.info(INFLUX_TOKEN)
-logger.info(INFLUX_ORG)
-logger.info(ALPACA_API_KEY)
-logger.info(ALPACA_SECRET_KEY)
-
+# --- Alpaca Clients ---
 trading_client = TradingClient(ALPACA_API_KEY, ALPACA_SECRET_KEY, paper=True)
 stock_data_client = StockHistoricalDataClient(ALPACA_API_KEY, ALPACA_SECRET_KEY)
 
+# --- FastAPI App ---
 app = FastAPI()
 
-
-async def fetch_all_active_us_equity_symbols():
+async def fetch_all_active_us_equity_symbols() -> List[str]:
+    """
+    Fetch all active US equity symbols from Alpaca.
+    """
     request = GetAssetsRequest(status=AssetStatus.ACTIVE)
     assets = await asyncio.to_thread(trading_client.get_all_assets, request)
     return [asset.symbol for asset in assets]
 
-
-async def fetch_bars_with_retries(symbol: str, start: datetime, end: datetime):
+async def fetch_bars_with_retries(symbol: str, start: datetime, end: datetime) -> List:
+    """
+    Fetch 1m bars for a symbol from Alpaca with retries.
+    """
     for attempt in range(RETRY_LIMIT):
         try:
             request = StockBarsRequest(
@@ -76,8 +72,36 @@ async def fetch_bars_with_retries(symbol: str, start: datetime, end: datetime):
     logger.error(f"Failed to fetch bars for {symbol} after {RETRY_LIMIT} attempts")
     return []
 
+def bar_to_point(bar, measurement: str) -> Point:
+    """
+    Convert an Alpaca bar object to an InfluxDB Point.
+    """
+    ts = bar.timestamp
+    # If bar.timestamp is not a datetime, convert from nanoseconds
+    if not isinstance(ts, datetime):
+        ts = datetime.fromtimestamp(ts / 1_000_000_000, tz=timezone.utc)
+    point = (
+        Point(measurement)
+        .tag("symbol", bar.symbol)
+        .field("open", float(bar.open))
+        .field("high", float(bar.high))
+        .field("low", float(bar.low))
+        .field("close", float(bar.close))
+        .field("volume", float(bar.volume))
+        .field("trade_count", float(getattr(bar, "trade_count", 0)))
+        .field("vwap", float(getattr(bar, "vwap", 0)))
+        .time(ts, WritePrecision.S)
+    )
+    return point
 
-async def backfill_worker(queue: asyncio.Queue , client, write_api,logger):
+async def backfill_worker(
+    queue: asyncio.Queue,
+    write_api,
+    logger: logging.Logger
+):
+    """
+    Background worker that fetches bars and writes them to InfluxDB.
+    """
     while True:
         task = await queue.get()
         if task is None:  # Shutdown sentinel
@@ -87,25 +111,13 @@ async def backfill_worker(queue: asyncio.Queue , client, write_api,logger):
         logger.info(f"Backfilling {symbol} from {start} to {end}")
 
         bars = await fetch_bars_with_retries(symbol, start, end)
+        logger.info(f"Fetched {len(bars)} bars for {symbol}")
         if not bars:
             logger.info(f"No data for {symbol} in given range.")
             queue.task_done()
             continue
-        # print(bar.timestamp)
-        points = []
-        for bar in bars:
-            ts = datetime.fromtimestamp(bar.timestamp / 1000, tz=timezone.utc)
-            point = (
-                Point("US_stocks")
-                .tag("symbol", symbol)
-                .field("open", float(bar.open))
-                .field("high", float(bar.high))
-                .field("low", float(bar.low))
-                .field("close", float(bar.close))
-                .field("volume", float(bar.volume))
-                .time(ts, WritePrecision.S)
-            )
-            points.append(point)
+
+        points = [bar_to_point(bar, MEASUREMENT) for bar in bars]
 
         try:
             write_api.write(bucket=INFLUX_BUCKET, org=INFLUX_ORG, record=points)
@@ -114,43 +126,48 @@ async def backfill_worker(queue: asyncio.Queue , client, write_api,logger):
             logger.error(f"Failed to write data for {symbol}: {e}")
         queue.task_done()
 
-
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    """
+    FastAPI lifespan context to manage backfill process.
+    """
     logger.info("Starting backfill process")
-        
     client = InfluxDBClient(url=INFLUX_URL, token=INFLUX_TOKEN, org=INFLUX_ORG)
     write_api = client.write_api(write_options=SYNCHRONOUS)
 
+    symbols = await fetch_all_active_us_equity_symbols()
+    logger.info(f"Fetched {len(symbols)} active symbols.")
 
-    # Use AsyncResolver to avoid aiodns usage
-    # connector = TCPConnector(resolver=AsyncResolver())
-    async with aiohttp.ClientSession() as session:
-        symbols = await fetch_all_active_us_equity_symbols()
+    # Adjust these dates as needed
+    start_dt = datetime.now(timezone.utc) - timedelta(days=30)
+    end_dt = datetime.now(timezone.utc) - timedelta(minutes=16)
 
-        start_dt = datetime.now(timezone.utc) - timedelta(days=1)
-        end_dt = datetime.now(timezone.utc) - timedelta(minutes=16)
+    queue = asyncio.Queue()
 
-        queue = asyncio.Queue()
+    # Launch workers
+    workers = [
+        asyncio.create_task(backfill_worker(queue, write_api, logger))
+        for _ in range(CONCURRENCY_LIMIT)
+    ]
 
-        # Launch workers
-        workers = [asyncio.create_task(backfill_worker(queue,client,write_api, logger)) for _ in range(CONCURRENCY_LIMIT)]
+    # Enqueue tasks
+    for symbol in symbols:
+        await queue.put((symbol, start_dt, end_dt))
 
-        # Enqueue tasks
-        for symbol in symbols:
-            await queue.put((symbol, start_dt, end_dt))
+    # Wait for all tasks to finish
+    await queue.join()
 
-        # Wait for all tasks to finish
-        await queue.join()
+    # Send shutdown signals to workers
+    for _ in workers:
+        await queue.put(None)
 
-        # Send shutdown signals to workers
-        for _ in workers:
-            await queue.put(None)
-
-        await asyncio.gather(*workers)
+    await asyncio.gather(*workers)
 
     logger.info("Backfill complete")
     yield
 
-
 app.router.lifespan_context = lifespan
+
+@app.get("/")
+def root():
+    return {"message": "Alpaca US stocks backfill service active."}

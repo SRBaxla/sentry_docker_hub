@@ -26,6 +26,7 @@ services:
       - "8002:8002"
     depends_on:
       - influxdb
+      - crypto-backfill
     env_file:
       - .env
   crypto-backfill:
@@ -45,16 +46,16 @@ services:
       - influxdb
 
 
-  neo4j:
-    image: neo4j:5.7
-    ports:
-      - "7474:7474"
-      - "7687:7687"
-    volumes:
-      - neo4j_data:/data
-      - neo4j_import:/import
-    env_file:
-    - .env
+  # neo4j:
+  #   image: neo4j:5.7
+  #   ports:
+  #     - "7474:7474"
+  #     - "7687:7687"
+  #   volumes:
+  #     - neo4j_data:/data
+  #     - neo4j_import:/import
+  #   env_file:
+  #   - .env
 
   sentiment_analyzer:
     build: ./sentiment_analyzer
@@ -66,17 +67,17 @@ services:
       timeout: 10s
       retries: 3
 
-  sentiment_engine:
-    build:
-      context: ./sentiment_engine
-    container_name: sentiment_engine
-    ports:
-      - "8007:8000"
-    env_file:
-      - .env
-    depends_on:
-      - neo4j_sync
-    restart: unless-stopped
+  # sentiment_engine:
+  #   build:
+  #     context: ./sentiment_engine
+  #   container_name: sentiment_engine
+  #   ports:
+  #     - "8007:8000"
+  #   env_file:
+  #     - .env
+  #   depends_on:
+  #     - neo4j_sync
+  #   restart: unless-stopped
 
   correlation_engine:
     build:
@@ -88,77 +89,77 @@ services:
       - .env
     depends_on:
       - influxdb
-      - neo4j_sync
+      # - neo4j_sync
     restart: unless-stopped
 
-  orchestrator:
-    build:
-      context: ./orchestrator
-    command: python main_orchestrator.py
-    depends_on:
-      - local_news_collector
-      - binance_collector
-      - sentiment_analyzer
-      - neo4j_sync
-      - sentiment_engine
-      - correlation_engine
-    env_file:
-      - .env
+  # orchestrator:
+  #   build:
+  #     context: ./orchestrator
+  #   command: python main_orchestrator.py
+  #   depends_on:
+  #     - local_news_collector
+  #     - binance_collector
+  #     - sentiment_analyzer
+  #     - neo4j_sync
+  #     - sentiment_engine
+  #     - correlation_engine
+  #   env_file:
+  #     - .env
 
-  neo4j_sync:
-    build: ./neo4j_sync
-    ports:
-      - "8003:8003"
-    depends_on:
-      - influxdb
-      - neo4j
-    env_file:
-      - .env
+  # neo4j_sync:
+  #   build: ./neo4j_sync
+  #   ports:
+  #     - "8003:8003"
+  #   depends_on:
+  #     - influxdb
+  #     - neo4j
+  #   env_file:
+  #     - .env
 
-  model_training:
-    build: ./model_training
-    ports:
-      - "8005:8005"
-    depends_on:
-      - influxdb
-    env_file:
-      - .env
-    command: python live_train.py
+  # model_training:
+  #   build: ./model_training
+  #   ports:
+  #     - "8005:8005"
+  #   depends_on:
+  #     - influxdb
+  #   env_file:
+  #     - .env
+  #   command: python live_train.py
 
-  inference_service:
-    build: ./inference_service
-    depends_on:
-      - model_training
-    ports:
-      - "5000:5000"
-    environment:
-      - MODEL_PATH=/models/latest
-    command: python serve.py
+  # inference_service:
+  #   build: ./inference_service
+  #   depends_on:
+  #     - model_training
+  #   ports:
+  #     - "5000:5000"
+  #   environment:
+  #     - MODEL_PATH=/models/latest
+  #   command: python serve.py
 
-  trade_agent:
-    build: ./trade_agent
-    depends_on:
-      - inference_service
-    environment:
-      - BROKER_API_KEY=${BINANCE_API_KEY}
-      - BROKER_SECRET=${BINANCE_API_SECRET}
-      - INFERENCE_URL=http://inference_service:5000
-      - BINANCE_BASE_URL=https://testnet.binance.vision
-      - BINANCE_FUTURES_URL=https://testnet.binancefuture.com
-      - USE_TESTNET=true
-      - TRADING_MODE=spot
-    command: python executor.py
+  # trade_agent:
+  #   build: ./trade_agent
+  #   depends_on:
+  #     - inference_service
+  #   environment:
+  #     - BROKER_API_KEY=${BINANCE_API_KEY}
+  #     - BROKER_SECRET=${BINANCE_API_SECRET}
+  #     - INFERENCE_URL=http://inference_service:5000
+  #     - BINANCE_BASE_URL=https://testnet.binance.vision
+  #     - BINANCE_FUTURES_URL=https://testnet.binancefuture.com
+  #     - USE_TESTNET=true
+  #     - TRADING_MODE=spot
+  #   command: python executor.py
 
-  backup_service:
-    build: ./backup_service
-    depends_on:
-      - influxdb
-      - neo4j
-    volumes:
-      - influxdb_backup:/backups/influxdb
-      - neo4j_data:/backups/neo4j
-    environment:
-      - BACKUP_SCHEDULE=0 */6 * * *
+  # backup_service:
+  #   build: ./backup_service
+  #   depends_on:
+  #     - influxdb
+  #     - neo4j
+  #   volumes:
+  #     - influxdb_backup:/backups/influxdb
+  #     - neo4j_data:/backups/neo4j
+  #   environment:
+  #     - BACKUP_SCHEDULE=0 */6 * * *
 
 volumes:
   influxdb_data:

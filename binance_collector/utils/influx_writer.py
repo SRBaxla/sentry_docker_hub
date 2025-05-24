@@ -8,6 +8,7 @@ from influxdb_client.client.write_api import WriteOptions
 from asyncio import get_running_loop
 from dotenv import load_dotenv
 load_dotenv()
+from influxdb_client.client.influxdb_client_async import InfluxDBClientAsync
 from influxdb_client import InfluxDBClient, BucketsApi
 
 # Thread pool for offloading writes
@@ -57,16 +58,12 @@ def get_influx_client():
     """If you still need a raw client elsewhere."""
     return _client
 
+
+
 async def async_write_batches(data_points, bucket_name=INFLUX_BUCKET):
     if not data_points:
         return
 
-    loop = get_running_loop()
-    # Offload to thread-pool so FastAPI/asyncio stays responsive
-    await loop.run_in_executor(
-        executor,
-        _write_api.write,
-        bucket_name,
-        INFLUX_ORG,
-        data_points
-    )
+    async with InfluxDBClientAsync(url=INFLUX_URL, token=INFLUX_TOKEN, org=INFLUX_ORG) as client:
+        write_api = client.write_api()
+        await write_api.write(bucket=bucket_name, record=data_points)
