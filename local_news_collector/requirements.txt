@@ -11,3 +11,4 @@ dateparser
 lxml==4.9.3  # Stable and often available as a wheel on all OSes
 fastapi
 uvicorn[standard]
+httpx
