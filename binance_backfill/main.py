@@ -279,7 +279,7 @@ async def lifespan(app: FastAPI):
         write_api = client.write_api(write_options=SYNCHRONOUS)
 
         symbol_semaphore = asyncio.Semaphore(10)
-        fill_semaphore = asyncio.Semaphore(20)
+        fill_semaphore = asyncio.Semaphore(15)
 
         async def throttled_backfill(symbol, start_dt, end_dt, session):
             async with symbol_semaphore:
@@ -309,7 +309,7 @@ async def lifespan(app: FastAPI):
                         elif creation_time:
                             start_dt = creation_time
                         else:
-                            start_dt = datetime(2021, 1, 1, tzinfo=timezone.utc)
+                            start_dt = datetime(2023, 1, 1, tzinfo=timezone.utc)
 
                         end_dt = datetime.now(timezone.utc).replace(second=0, microsecond=0)
 
