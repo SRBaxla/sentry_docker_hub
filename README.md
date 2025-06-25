@@ -1,4 +1,4 @@
-# 🧠 Sentry Docker Hub (ongoing,)
+# 🧠 Sentry Docker Hub (On-going)
 
 A full-stack, containerized, AI-powered trading system with real-time data ingestion, sentiment analysis, model training, trade execution, and backup — all orchestrated with Docker Compose.
 
